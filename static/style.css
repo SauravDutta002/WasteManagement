@@ -204,9 +204,58 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .spinner { width: 13px; height: 13px; border-radius: 50%; border: 2px solid #d1fae5; border-top-color: var(--brand); animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.camera { position: relative; border-radius: 12px; overflow: hidden; background: #000; }
-.camera video { display: block; width: 100%; max-height: 340px; object-fit: cover; }
-.cam-actions { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; gap: 10px; padding: 14px; background: linear-gradient(transparent, rgba(0,0,0,.55)); }
+.seg { display: inline-flex; align-items: center; gap: 6px; }
+.seg svg { width: 14px; height: 14px; }
+
+/* Camera */
+.camera { position: relative; height: 340px; border-radius: 12px; overflow: hidden; background: #0b1220; }
+.camera video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.camera.mirrored video { transform: scaleX(-1); }
+.camera .corner { opacity: 1; border-color: #34d399; }
+.cam-top { position: absolute; top: 14px; left: 44px; right: 44px; display: flex; justify-content: space-between; align-items: center; gap: 8px; z-index: 2; }
+.cam-badge, .cam-live-result {
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px;
+  background: rgba(11, 18, 32, .6); backdrop-filter: blur(6px); color: #fff; font-size: 12px; font-weight: 600;
+}
+.cam-live-result { background: color-mix(in srgb, var(--c, #64748b) 85%, transparent); }
+.rec { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; }
+.camera.live .rec { background: #ef4444; animation: pulse 1s infinite; }
+.cam-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 3; }
+.cam-flash.go { animation: flash .35s ease-out; }
+@keyframes flash { from { opacity: .85; } to { opacity: 0; } }
+.cam-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  display: flex; justify-content: center; align-items: center; gap: 28px; padding: 16px;
+  background: linear-gradient(transparent, rgba(0,0,0,.6));
+}
+.shutter {
+  width: 62px; height: 62px; border-radius: 50%; padding: 5px; cursor: pointer;
+  border: 3px solid #fff; background: transparent; transition: transform .1s;
+}
+.shutter span { display: block; width: 100%; height: 100%; border-radius: 50%; background: #fff; transition: background .15s; }
+.shutter:hover span { background: #d1fae5; }
+.shutter:active { transform: scale(.92); }
+.shutter:disabled { opacity: .5; cursor: wait; }
+.cam-icon-btn {
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  border: 0; background: rgba(255,255,255,.18); color: #fff; backdrop-filter: blur(6px);
+}
+.cam-icon-btn:hover { background: rgba(255,255,255,.3); }
+.cam-icon-btn svg { width: 17px; height: 17px; }
+.cam-controls { display: flex; align-items: flex-end; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
+.cam-controls .field { min-width: 180px; }
+
+.switch { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px 12px 6px 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); height: 38px; }
+.switch input { position: absolute; opacity: 0; pointer-events: none; }
+.track { position: relative; width: 36px; height: 20px; border-radius: 99px; background: #cfd5dd; transition: background .2s; flex-shrink: 0; }
+.thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s; }
+.switch input:checked + .track { background: var(--brand); }
+.switch input:checked + .track .thumb { transform: translateX(16px); }
+.switch input:focus-visible + .track { box-shadow: 0 0 0 3px rgba(5,150,105,.25); }
+.switch-text { display: flex; flex-direction: column; line-height: 1.2; }
+.switch-text b { font-size: 13px; font-weight: 600; }
+.switch-text small { font-size: 11.5px; color: var(--muted); }
+select.mini { height: auto; padding: 0 16px 0 4px; font-size: 11.5px; border-radius: 5px; box-shadow: none; background-position: right 1px center; background-size: 12px; }
 
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; }
 .file-meta { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: var(--muted); }
@@ -396,7 +445,9 @@ select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px 
   .modules { grid-template-columns: repeat(2, 1fr); }
   .res-hero { grid-template-columns: auto 1fr; }
   .gauge { grid-column: 1 / -1; justify-self: center; }
-  .viewfinder { height: 260px; }
+  .viewfinder, .camera { height: 260px; }
+  .head-actions { flex-wrap: wrap; }
+  .cam-controls .field { min-width: 0; width: 100%; }
   .table th, .table td { padding: 9px 10px; }
   .table .item { max-width: 110px; }
   .table th:last-child, .table td:last-child { display: none; }

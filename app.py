@@ -21,6 +21,7 @@ app.config["MAX_CONTENT_LENGTH"] = 15 * 1024 * 1024  # 15 MB uploads
 classifier = WasteClassifier()
 board = NodeMCU()
 history = []  # recent results, newest first
+live_state = {"last": None}  # last category seen by live camera scan
 stats = {k: 0 for k in list(CATEGORIES) + ["unknown"]}
 
 
@@ -28,6 +29,8 @@ def category_info():
     info = {k: {key: v[key] for key in ("label", "led", "bin", "tip")} for k, v in CATEGORIES.items()}
     info["unknown"] = {"label": "Unknown", "led": "Blink all + long beep", "bin": "Check manually",
                        "tip": "Try a clearer photo with a plain background."}
+    info["none"] = {"label": "No item detected", "led": "No signal", "bin": "—",
+                    "tip": "Hold the waste item close to the camera, filling most of the frame."}
     return info
 
 
@@ -112,7 +115,19 @@ def classify():
     cat = result["category"]
     result["info"] = category_info()[cat]
 
-    if board.connected:
+    # Live camera scan: frames arrive every few seconds. Only signal the board and log
+    # an item when the detected material changes, so the buzzer doesn't beep non-stop.
+    live = request.form.get("live") == "1"
+    no_item = cat == "none"
+    repeat = no_item or (live and cat == live_state["last"])
+    live_state["last"] = cat if live else None
+    result["repeat"] = repeat  # True = nothing new: no board signal, not logged
+
+    if no_item:
+        result["led"] = {"sent": False, "skipped": True, "error": "No waste item in view, station not signalled"}
+    elif repeat:
+        result["led"] = {"sent": False, "skipped": True, "error": "Same material as the previous frame, station unchanged"}
+    elif board.connected:
         try:
             result["led"] = {"sent": True, "reply": board.send_category(cat)}
         except Exception as exc:  # noqa: BLE001
@@ -120,10 +135,11 @@ def classify():
     else:
         result["led"] = {"sent": False, "error": "NodeMCU not connected"}
 
-    stats[cat] += 1
-    history.insert(0, {"category": cat, "confidence": result["confidence"],
-                       "name": file.filename, "time": datetime.now().strftime("%H:%M:%S")})
-    del history[20:]
+    if not repeat:
+        stats[cat] += 1
+        history.insert(0, {"category": cat, "confidence": result["confidence"],
+                           "name": file.filename, "time": datetime.now().strftime("%H:%M:%S")})
+        del history[20:]
 
     result["ok"] = True
     return jsonify(result)

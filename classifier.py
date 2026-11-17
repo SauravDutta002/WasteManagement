@@ -91,6 +91,21 @@ CATEGORIES = {
 
 MIN_CONFIDENCE = 0.30  # below this the result is reported as "unknown"
 
+# Scenes with no waste item in them (mostly for the live camera, which often sees the
+# person or the room). If these win, the result is "none" and the board is not signalled.
+NO_ITEM_PROMPTS = [
+    "a photo of a person's face",
+    "a selfie of a person looking at the camera",
+    "a photo of a person sitting in a room",
+    "a photo of an empty room",
+    "a photo of a plain wall or ceiling",
+    "a blank, plain coloured surface with no objects",
+    "a photo of a beige or white painted wall",
+    "a photo of an empty table or desk",
+    "a dark, blurry photo with nothing in it",
+    "a photo of a hand with nothing in it",
+]
+
 
 def _as_tensor(features):
     """transformers v5 returns a model-output object; v4 returns the tensor directly."""
@@ -118,6 +133,9 @@ class WasteClassifier:
                 for p in cat["prompts"]:
                     prompts.append(p)
                     self.prompt_owner.append(key)
+            for p in NO_ITEM_PROMPTS:
+                prompts.append(p)
+                self.prompt_owner.append("none")
 
             with torch.no_grad():
                 tokens = self.processor(text=prompts, return_tensors="pt", padding=True).to(self.device)
@@ -140,8 +158,9 @@ class WasteClassifier:
             logits = self.model.logit_scale.exp() * img @ self.text_features.T
             probs = logits.softmax(dim=-1)[0].cpu().tolist()
 
-        scores = {k: 0.0 for k in CATEGORIES}
-        best_prompt = {k: ("", 0.0) for k in CATEGORIES}
+        keys = list(CATEGORIES) + ["none"]
+        scores = {k: 0.0 for k in keys}
+        best_prompt = {k: ("", 0.0) for k in keys}
         for prob, owner, prompt in zip(probs, self.prompt_owner, self._all_prompts()):
             scores[owner] += prob
             if prob > best_prompt[owner][1]:
@@ -149,15 +168,20 @@ class WasteClassifier:
 
         ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
         top_key, top_score = ranked[0]
-        category = top_key if top_score >= MIN_CONFIDENCE else "unknown"
+        if top_key == "none":
+            category = "none"
+        else:
+            category = top_key if top_score >= MIN_CONFIDENCE else "unknown"
 
         return {
             "category": category,
             "confidence": round(top_score, 4),
             "matched": best_prompt[top_key][0].replace("a photo of ", ""),
-            "scores": {k: round(v, 4) for k, v in ranked},
+            # waste categories only; "none" is reported through the category itself
+            "scores": {k: round(v, 4) for k, v in ranked if k != "none"},
         }
 
     def _all_prompts(self):
         for cat in CATEGORIES.values():
             yield from cat["prompts"]
+        yield from NO_ITEM_PROMPTS

@@ -66,6 +66,10 @@
       </div>
       <div class="head-actions">
         <span class="chip-status" id="headChip"><i class="dot-s err"></i>Station offline</span>
+        <button class="btn" id="headCamBtn" type="button">
+          <svg viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+          Camera
+        </button>
         <button class="btn primary" id="uploadBtn" type="button">
           <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
           Upload image
@@ -85,8 +89,12 @@
             <p class="card-sub">Drop, paste (Ctrl+V), capture or pick a sample</p>
           </div>
           <div class="segmented" role="tablist">
-            <button type="button" class="seg active" id="segUpload">Upload</button>
-            <button type="button" class="seg" id="segCamera">Camera</button>
+            <button type="button" class="seg active" id="segUpload">
+              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>Upload
+            </button>
+            <button type="button" class="seg" id="segCamera">
+              <svg viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>Camera
+            </button>
           </div>
         </div>
 
@@ -108,13 +116,33 @@
         </label>
 
         <div id="cameraWrap" class="camera" hidden>
-          <video id="video" autoplay playsinline></video>
-          <div class="cam-actions">
-            <button class="btn" id="cameraClose" type="button">Cancel</button>
-            <button class="btn primary" id="snapBtn" type="button">
-              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>Capture
+          <video id="video" autoplay playsinline muted></video>
+          <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+          <div class="cam-top">
+            <span class="cam-badge" id="camBadge"><i class="rec"></i>Camera</span>
+            <span class="cam-live-result" id="liveResult" hidden></span>
+          </div>
+          <div class="cam-flash" id="camFlash"></div>
+          <div class="cam-bar">
+            <button class="cam-icon-btn" id="cameraClose" type="button" title="Close camera">
+              <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+            <button class="shutter" id="snapBtn" type="button" title="Capture and classify (Space)"><span></span></button>
+            <button class="cam-icon-btn" id="mirrorBtn" type="button" title="Mirror preview">
+              <svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="m8 7-5 5 5 5V7z"/><path d="m16 7 5 5-5 5V7z"/></svg>
             </button>
           </div>
+        </div>
+        <div class="cam-controls" id="camControls" hidden>
+          <label class="field">
+            <span>Camera</span>
+            <select id="cameraSelect"><option>Default camera</option></select>
+          </label>
+          <label class="switch" title="Classify a frame automatically every few seconds">
+            <input type="checkbox" id="liveToggle">
+            <span class="track"><span class="thumb"></span></span>
+            <span class="switch-text"><b>Live scan</b><small>Auto-classify every <select id="liveInterval" class="mini"><option value="2000">2s</option><option value="3000" selected>3s</option><option value="5000">5s</option></select></small></span>
+          </label>
         </div>
 
         <div class="toolbar">

@@ -35,6 +35,15 @@ Open http://127.0.0.1:5000. The app auto-connects to the NodeMCU (it detects CH3
 
 The first run downloads the CLIP model (~600 MB). After that it loads from cache.
 
+## Camera
+
+Click **Camera** in the header or the scanner card. The browser asks for permission once.
+
+- **Shutter button** (or the **Space** key) takes a photo and classifies it.
+- **Live scan** classifies a frame automatically every 2, 3 or 5 seconds. The board only gets a signal when the material changes, so the buzzer doesn't beep non-stop.
+- If no waste item is in view (your face, the room, a wall), the result is "No item detected" and the board is left alone.
+- Use the **Camera** dropdown to switch between the laptop webcam and a USB webcam. The ⇋ button mirrors the preview.
+
 ## Tuning
 
 - Add or adjust detection phrases in `CATEGORIES` in `classifier.py`. More specific prompts give better accuracy.

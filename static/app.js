@@ -19,6 +19,7 @@ const CAT = {
   ewaste:  { label: "E-waste", color: "#16a34a", led: "#22c55e", ledName: "Green LED", beep: "3 short beeps", buzzMs: 900 },
   other:   { label: "Other",   color: "#64748b", led: null, ledName: "All LEDs blink", beep: "1 long beep", buzzMs: 1200 },
   unknown: { label: "Unknown", color: "#a855f7", led: null, ledName: "All LEDs blink", beep: "1 long beep", buzzMs: 1200 },
+  none:    { label: "No item", color: "#94a3b8", led: null, ledName: "No signal", beep: "None", buzzMs: 0 },
 };
 const LED_CMD = { metal: "METAL", plastic: "PLASTIC", ewaste: "EWASTE" };
 const KPI_KEYS = ["metal", "plastic", "ewaste", "other"];
@@ -159,6 +160,7 @@ function renderActivity(stats, history) {
 function setFile(file, expectedCategory = null) {
   if (!file || !file.type.startsWith("image/")) return toast("Please choose an image file", "err");
   closeCamera();
+  stopLive();
   expected = expectedCategory;
   if (!expectedCategory) document.querySelectorAll(".sample").forEach((s) => s.classList.remove("active"));
   currentFile = file;
@@ -183,26 +185,38 @@ document.addEventListener("paste", (e) => {
 });
 
 /* ================= Classification ================= */
-async function classify() {
-  if (!currentFile) return;
+let busy = false;
+
+async function classify(file = currentFile, { live = false } = {}) {
+  if (!file || busy) return null;
+  busy = true;
   $("scanBtn").disabled = true;
-  $("scanning").hidden = false;
+  $("snapBtn").disabled = true;
+  if (!live && $("cameraWrap").hidden) $("scanning").hidden = false;
   const fd = new FormData();
-  fd.append("image", currentFile);
+  fd.append("image", file);
+  if (live) fd.append("live", "1");
   try {
     const r = await api("/api/classify", { method: "POST", body: fd });
     renderResult(r);
-    showLeds(r.category);
-    buzz((CAT[r.category] || CAT.unknown).buzzMs);
-    refreshStatus();
+    if (!r.repeat) {
+      showLeds(r.category);
+      buzz((CAT[r.category] || CAT.unknown).buzzMs);
+      refreshStatus();
+    }
+    return r;
   } catch (e) {
     toast(e.message, "err");
+    if (live) stopLive();
+    return null;
   } finally {
+    busy = false;
     $("scanning").hidden = true;
-    $("scanBtn").disabled = !modelReady;
+    $("scanBtn").disabled = !modelReady || !currentFile;
+    $("snapBtn").disabled = false;
   }
 }
-$("scanBtn").addEventListener("click", classify);
+$("scanBtn").addEventListener("click", () => classify());
 
 function renderResult(r) {
   const c = CAT[r.category] || CAT.unknown;
@@ -212,7 +226,7 @@ function renderResult(r) {
   $("resultEmpty").hidden = true;
   $("result").hidden = false;
   $("resultTime").textContent = `Completed at ${new Date().toLocaleTimeString([], { hour12: false })}`;
-  $("resIcon").innerHTML = svg(r.category);
+  $("resIcon").innerHTML = svg(r.category === "none" ? "unknown" : r.category);
   $("resLabel").textContent = r.info.label;
   $("resMatched").textContent = r.category === "unknown" ? "Confidence below threshold" : `Closest match: ${r.matched}`;
 
@@ -236,7 +250,8 @@ function renderResult(r) {
   } else v.hidden = true;
 
   const ls = $("resLedStatus");
-  if (r.led.sent) { ls.className = "signal ok"; ls.innerHTML = `${svg("check")}Station acknowledged: <span class="mono">${escapeHtml(r.led.reply)}</span>`; }
+  if (r.led.skipped) { ls.className = "signal ok"; ls.innerHTML = `${svg("check")}${escapeHtml(r.led.error)}`; }
+  else if (r.led.sent) { ls.className = "signal ok"; ls.innerHTML = `${svg("check")}Station acknowledged: <span class="mono">${escapeHtml(r.led.reply)}</span>`; }
   else { ls.className = "signal err"; ls.innerHTML = `${svg("alert")}Station not signalled: ${escapeHtml(r.led.error)}`; }
 
   const entries = Object.entries(r.scores);
@@ -251,35 +266,141 @@ function renderResult(r) {
 }
 
 /* ================= Camera ================= */
+let liveTimer = null;
+let cameraId = "";
+
+function cameraError(e) {
+  const msg = {
+    NotAllowedError: "Camera permission denied. Allow camera access from the icon in the address bar.",
+    NotFoundError: "No camera found. Plug in a webcam and try again.",
+    NotReadableError: "The camera is being used by another app (Zoom, Teams, Camera app…). Close it and retry.",
+    OverconstrainedError: "The selected camera is not available.",
+  }[e?.name];
+  toast(msg || "Could not start the camera", "err");
+}
+
+async function listCameras() {
+  const devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+  const sel = $("cameraSelect");
+  sel.innerHTML = devices.length
+    ? devices.map((d, i) => `<option value="${escapeHtml(d.deviceId)}">${escapeHtml(d.label || "Camera " + (i + 1))}</option>`).join("")
+    : `<option value="">No camera found</option>`;
+  const active = stream?.getVideoTracks()[0]?.getSettings().deviceId;
+  if (active) sel.value = active;
+}
+
+async function startStream(deviceId) {
+  stream?.getTracks().forEach((t) => t.stop());
+  const video = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" };
+  stream = await navigator.mediaDevices.getUserMedia({ video: { ...video, width: { ideal: 1280 }, height: { ideal: 720 } } });
+  $("video").srcObject = stream;
+  // front-facing laptop webcams feel natural mirrored
+  const facing = stream.getVideoTracks()[0]?.getSettings().facingMode;
+  $("cameraWrap").classList.toggle("mirrored", facing !== "environment");
+}
+
 async function openCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) return toast("This browser does not support camera access", "err");
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-    $("video").srcObject = stream;
+    await startStream(cameraId);
     $("cameraWrap").hidden = false;
+    $("camControls").hidden = false;
     $("dropzone").hidden = true;
     $("segCamera").classList.add("active");
     $("segUpload").classList.remove("active");
-  } catch {
-    toast("Camera not available on this device", "err");
+    $("scan").scrollIntoView({ block: "start" });
+    listCameras();
+  } catch (e) {
+    cameraError(e);
   }
 }
+
 function closeCamera() {
+  stopLive();
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
   $("cameraWrap").hidden = true;
+  $("camControls").hidden = true;
   $("dropzone").hidden = false;
   $("segUpload").classList.add("active");
   $("segCamera").classList.remove("active");
 }
+
+function grabFrame() {
+  const v = $("video");
+  if (!v.videoWidth) return Promise.resolve(null);
+  const c = document.createElement("canvas");
+  const scale = Math.min(1, 800 / v.videoWidth); // the model works at 224px, no need to upload full HD
+  c.width = Math.round(v.videoWidth * scale);
+  c.height = Math.round(v.videoHeight * scale);
+  c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+  return new Promise((res) => c.toBlob(res, "image/jpeg", 0.9));
+}
+
+async function capture({ live = false } = {}) {
+  if (!modelReady) return toast("AI model is still loading, please wait…");
+  const blob = await grabFrame();
+  if (!blob) return;
+  const stamp = new Date().toLocaleTimeString([], { hour12: false }).replace(/:/g, "");
+  const file = new File([blob], `${live ? "live" : "capture"}-${stamp}.jpg`, { type: "image/jpeg" });
+  if (!live) {
+    const f = $("camFlash");
+    f.classList.remove("go"); void f.offsetWidth; f.classList.add("go");
+  }
+  expected = null;
+  currentFile = file;
+  $("fileMeta").innerHTML = `${svg("file")}<b>${escapeHtml(file.name)}</b><span>· ${fmtSize(file.size)}</span>`;
+  const preview = $("preview");
+  preview.src = URL.createObjectURL(file);
+  preview.hidden = false;
+  $("dzEmpty").hidden = true;
+  $("dropzone").classList.add("has-image");
+
+  const r = await classify(file, { live });
+  if (r) {
+    const c = CAT[r.category] || CAT.unknown;
+    const pill = $("liveResult");
+    pill.style.setProperty("--c", c.color);
+    pill.textContent = `${c.label} · ${Math.round(r.confidence * 100)}%`;
+    pill.hidden = false;
+  }
+}
+
+function liveLoop() {
+  if (!$("liveToggle").checked || !stream) return;
+  capture({ live: true }).finally(() => {
+    if ($("liveToggle").checked && stream) liveTimer = setTimeout(liveLoop, +$("liveInterval").value);
+  });
+}
+function startLive() {
+  $("cameraWrap").classList.add("live");
+  $("camBadge").lastChild.textContent = "Live scanning";
+  clearTimeout(liveTimer);
+  liveLoop();
+}
+function stopLive() {
+  clearTimeout(liveTimer);
+  $("liveToggle").checked = false;
+  $("cameraWrap").classList.remove("live");
+  $("camBadge").lastChild.textContent = "Camera";
+}
+
 $("segCamera").addEventListener("click", openCamera);
+$("headCamBtn").addEventListener("click", openCamera);
 $("segUpload").addEventListener("click", closeCamera);
 $("cameraClose").addEventListener("click", closeCamera);
-$("snapBtn").addEventListener("click", () => {
-  const v = $("video");
-  const c = document.createElement("canvas");
-  c.width = v.videoWidth; c.height = v.videoHeight;
-  c.getContext("2d").drawImage(v, 0, 0);
-  c.toBlob((b) => setFile(new File([b], `capture-${Date.now()}.jpg`, { type: "image/jpeg" })), "image/jpeg", 0.92);
+$("snapBtn").addEventListener("click", () => capture());
+$("mirrorBtn").addEventListener("click", () => $("cameraWrap").classList.toggle("mirrored"));
+$("liveToggle").addEventListener("change", (e) => (e.target.checked ? startLive() : stopLive()));
+$("cameraSelect").addEventListener("change", async (e) => {
+  cameraId = e.target.value;
+  try { await startStream(cameraId); } catch (err) { cameraError(err); }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space" && stream && !e.repeat && !["INPUT", "SELECT", "BUTTON", "TEXTAREA"].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    capture();
+  }
 });
 
 /* ================= Hardware controls ================= */
