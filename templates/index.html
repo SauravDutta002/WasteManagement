@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EcoSort · Smart Waste Management</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23059669'/><path d='M10 21l6-11 6 11z' fill='none' stroke='white' stroke-width='2.5' stroke-linejoin='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="shell">
+
+  <!-- ============ Sidebar ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 19H4.8a1.8 1.8 0 0 1-1.6-2.7L7 9.8"/><path d="M11 19h8.2a1.8 1.8 0 0 0 1.6-2.7l-1.2-2.1"/><path d="m14 16-3 3 3 3"/><path d="M8.3 13.6 7 9.8l-3.8 1.3"/><path d="m9.3 5.6 1.1-1.9a1.8 1.8 0 0 1 3.1 0l3.9 6.8"/><path d="m13.4 9.9 3.5-.4.4-3.9"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">EcoSort</div>
+        <div class="brand-sub">Waste Intelligence</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-label">Workspace</div>
+      <a href="#scan" class="nav-item active">
+        <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
+        Classify
+      </a>
+      <a href="#device" class="nav-item">
+        <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+        Sorting station
+      </a>
+      <a href="#activity" class="nav-item">
+        <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activity
+      </a>
+    </nav>
+
+    <div class="side-status">
+      <div class="nav-label">System</div>
+      <div class="sys-row"><span>AI model</span><span class="sys-val" id="modelStatus"><i class="dot-s warn"></i>Loading</span></div>
+      <div class="sys-row"><span>Compute</span><span class="sys-val mono" id="computeStatus">—</span></div>
+      <div class="sys-row"><span>NodeMCU</span><span class="sys-val" id="boardStatus"><i class="dot-s err"></i>Offline</span></div>
+      <div class="sys-row"><span>Port</span><span class="sys-val mono" id="portStatus">—</span></div>
+    </div>
+
+    <div class="side-foot">
+      <div class="model-card">
+        <div class="mc-title">CLIP ViT-B/32</div>
+        <div class="mc-sub">Zero-shot vision model running locally. No data leaves this computer.</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ Main ============ -->
+  <div class="main">
+    <header class="page-head">
+      <div>
+        <div class="crumb">Dashboard <span>/</span> Classify</div>
+        <h1>Waste classification</h1>
+        <p class="sub">Identify waste from a photo and signal the sorting station in real time.</p>
+      </div>
+      <div class="head-actions">
+        <span class="chip-status" id="headChip"><i class="dot-s err"></i>Station offline</span>
+        <button class="btn primary" id="uploadBtn" type="button">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+          Upload image
+        </button>
+      </div>
+    </header>
+
+    <!-- KPIs -->
+    <section class="kpis" id="kpis"></section>
+
+    <!-- Scanner + Result -->
+    <section class="grid-main" id="scan">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Scanner</h2>
+            <p class="card-sub">Drop, paste (Ctrl+V), capture or pick a sample</p>
+          </div>
+          <div class="segmented" role="tablist">
+            <button type="button" class="seg active" id="segUpload">Upload</button>
+            <button type="button" class="seg" id="segCamera">Camera</button>
+          </div>
+        </div>
+
+        <label id="dropzone" class="viewfinder">
+          <input type="file" id="fileInput" accept="image/*" hidden>
+          <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+          <img id="preview" alt="" hidden>
+          <div id="dzEmpty" class="vf-empty">
+            <div class="vf-icon">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>
+            </div>
+            <strong>Drop an image to analyse</strong>
+            <span>or <u>browse files</u> · JPG, PNG, WEBP up to 15 MB</span>
+          </div>
+          <div id="scanning" class="scanning" hidden>
+            <div class="scanline"></div>
+            <div class="scan-label"><span class="spinner"></span>Analysing material…</div>
+          </div>
+        </label>
+
+        <div id="cameraWrap" class="camera" hidden>
+          <video id="video" autoplay playsinline></video>
+          <div class="cam-actions">
+            <button class="btn" id="cameraClose" type="button">Cancel</button>
+            <button class="btn primary" id="snapBtn" type="button">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>Capture
+            </button>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="file-meta" id="fileMeta">No image selected</div>
+          <button class="btn primary" id="scanBtn" type="button" disabled>
+            <svg viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+            Classify
+          </button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="sub-head">
+          <h3>Sample library</h3>
+          <div class="filters" id="sampleFilters">
+            <button type="button" class="filter active" data-f="all">All</button>
+            <button type="button" class="filter" data-f="metal">Metal</button>
+            <button type="button" class="filter" data-f="plastic">Plastic</button>
+            <button type="button" class="filter" data-f="ewaste">E-waste</button>
+            <button type="button" class="filter" data-f="other">Other</button>
+          </div>
+        </div>
+        <div class="samples" id="samples"><span class="muted">Loading samples…</span></div>
+      </div>
+
+      <div class="card result-card">
+        <div class="card-head">
+          <div>
+            <h2>Analysis</h2>
+            <p class="card-sub" id="resultTime">Awaiting input</p>
+          </div>
+          <span class="verdict" id="verdict" hidden></span>
+        </div>
+
+        <div id="resultEmpty" class="empty">
+          <div class="empty-art">
+            <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <strong>No analysis yet</strong>
+          <p>Upload a photo or choose a sample. The detected material, confidence and disposal guidance will appear here.</p>
+        </div>
+
+        <div id="result" hidden>
+          <div class="res-hero">
+            <div class="res-icon" id="resIcon"></div>
+            <div class="res-text">
+              <div class="overline">Detected material</div>
+              <div class="res-label" id="resLabel">—</div>
+              <div class="res-matched" id="resMatched"></div>
+            </div>
+            <div class="gauge">
+              <svg viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="34" class="g-track"/>
+                <circle cx="40" cy="40" r="34" class="g-fill" id="gaugeFill"/>
+              </svg>
+              <div class="g-text"><b id="resConf">0%</b><span>confidence</span></div>
+            </div>
+          </div>
+
+          <dl class="facts">
+            <div><dt>Station signal</dt><dd id="resLed">—</dd></div>
+            <div><dt>Buzzer</dt><dd id="resBeep">—</dd></div>
+            <div class="wide"><dt>Dispose in</dt><dd id="resBin">—</dd></div>
+          </dl>
+
+          <div class="callout">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <p id="resTip"></p>
+          </div>
+
+          <div class="signal" id="resLedStatus"></div>
+
+          <div class="sub-head tight"><h3>Score breakdown</h3></div>
+          <div id="scores" class="scores"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Device + Activity -->
+    <section class="grid-2">
+      <div class="card" id="device">
+        <div class="card-head">
+          <div>
+            <h2>Sorting station</h2>
+            <p class="card-sub">NodeMCU ESP8266 · USB serial 115200 baud</p>
+          </div>
+          <span class="chip-status" id="deviceChip"><i class="dot-s err"></i>Offline</span>
+        </div>
+
+        <div class="board">
+          <div class="board-label mono">ESP8266 · NODEMCU v1.0</div>
+          <div class="modules">
+            <button type="button" class="module led" data-cmd="METAL" style="--c:#ef4444;--glow:#ef4444">
+              <span class="bulb"></span><b>Metal</b><small class="mono">D1 · RED</small>
+            </button>
+            <button type="button" class="module led" data-cmd="PLASTIC" style="--c:#94a3b8;--glow:#ffffff">
+              <span class="bulb"></span><b>Plastic</b><small class="mono">D2 · WHITE</small>
+            </button>
+            <button type="button" class="module led" data-cmd="EWASTE" style="--c:#22c55e;--glow:#22c55e">
+              <span class="bulb"></span><b>E-waste</b><small class="mono">D6 · GREEN</small>
+            </button>
+            <button type="button" class="module buzzer" id="buzzer" data-cmd="BEEP">
+              <span class="buzz-icon">
+                <svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>
+              </span>
+              <b>Buzzer</b><small class="mono">D7</small>
+            </button>
+          </div>
+          <div class="board-hint">Click a module to fire it on the hardware</div>
+        </div>
+
+        <div class="form-row">
+          <label class="field">
+            <span>Serial port</span>
+            <div class="select-wrap">
+              <select id="portSelect"></select>
+              <button class="icon-btn" id="refreshBtn" type="button" title="Refresh ports">
+                <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+              </button>
+            </div>
+          </label>
+          <button class="btn primary" id="connectBtn" type="button">Connect</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn" data-send="TEST" type="button">
+            <svg viewBox="0 0 24 24"><path d="M9 2v6l-5 9a3 3 0 0 0 2.6 4.5h10.8A3 3 0 0 0 20 17l-5-9V2"/><path d="M8 2h8"/></svg>Run self-test
+          </button>
+          <button class="btn" data-send="OFF" type="button">
+            <svg viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>All off
+          </button>
+        </div>
+      </div>
+
+      <div class="card" id="activity">
+        <div class="card-head">
+          <div>
+            <h2>Recent activity</h2>
+            <p class="card-sub" id="totalCount">0 items processed this session</p>
+          </div>
+        </div>
+        <div class="dist" id="dist"><span class="dist-empty"></span></div>
+        <div class="dist-legend" id="distLegend"></div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Item</th><th>Material</th><th class="num">Confidence</th><th class="num">Time</th></tr></thead>
+            <tbody id="history"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot">EcoSort · Smart Waste Management System</footer>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
